@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: devops-app
-        image: devops-eks-pipeline:latest
+        image: nginx:alpine
         ports:
         - containerPort: 3000
           name: http
