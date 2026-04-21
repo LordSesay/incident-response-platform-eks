@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: incident-response-config
+  namespace: incident-response
+data:
+  AWS_REGION: "us-east-1"
+  INCIDENTS_TABLE: "incident-response-incidents"

@@ -1,33 +1,31 @@
-# Variables for EKS Infrastructure Configuration
-
 variable "aws_region" {
-  description = "AWS region for resources"
+  description = "AWS region for all resources"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
-variable "cluster_name" {
-  description = "Name of the EKS cluster"
+variable "project_name" {
+  description = "Base name for project resources"
   type        = string
-  default     = "devops-eks-cluster"
+  default     = "incident-response"
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name"
   type        = string
   default     = "dev"
 }
 
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
+variable "eks_cluster_name" {
+  description = "EKS cluster name"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "incident-response-eks"
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version for EKS cluster"
+  description = "EKS Kubernetes version"
   type        = string
-  default     = "1.28"
+  default     = "1.30"
 }
 
 variable "node_instance_types" {
@@ -36,20 +34,26 @@ variable "node_instance_types" {
   default     = ["t3.medium"]
 }
 
-variable "node_desired_size" {
-  description = "Desired number of nodes in the EKS node group"
+variable "desired_size" {
+  description = "Desired node count"
   type        = number
   default     = 2
 }
 
-variable "node_max_size" {
-  description = "Maximum number of nodes in the EKS node group"
-  type        = number
-  default     = 4
-}
-
-variable "node_min_size" {
-  description = "Minimum number of nodes in the EKS node group"
+variable "min_size" {
+  description = "Minimum node count"
   type        = number
   default     = 1
+}
+
+variable "max_size" {
+  description = "Maximum node count"
+  type        = number
+  default     = 3
+}
+
+variable "incidents_table_name" {
+  description = "DynamoDB incidents table name"
+  type        = string
+  default     = "incident-response-incidents"
 }
