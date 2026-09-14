@@ -1,0 +1,48 @@
+name: incident-response-baseline
+x-app-environment: &app-environment
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_EC2_METADATA_DISABLED: "true"
+  INCIDENTS_TABLE: incident-response-incidents
+  DYNAMODB_ENDPOINT_URL: http://dynamodb:8000
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:2.5.2
+    command: -jar DynamoDBLocal.jar -inMemory -sharedDb
+  ingestion-api:
+    build: ./application/ingestion-api
+    environment: *app-environment
+    depends_on:
+      - dynamodb
+    ports:
+      - "127.0.0.1:8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  incident-api:
+    build: ./application/incident-api
+    environment: *app-environment
+    depends_on:
+      - dynamodb
+    ports:
+      - "127.0.0.1:8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  smoke:
+    build: ./application/ingestion-api
+    environment: *app-environment
+    depends_on:
+      ingestion-api:
+        condition: service_healthy
+      incident-api:
+        condition: service_healthy
+    volumes:
+      - ./scripts/smoke_test.py:/app/smoke_test.py:ro
+    command: ["python", "/app/smoke_test.py"]
+    profiles: ["test"]

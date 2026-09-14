@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: ingestion-api
-          image: YOUR_ECR_URI/ingestion-api:latest
+          image: 767398054553.dkr.ecr.us-east-1.amazonaws.com/ingestion-api:latest
           ports:
             - containerPort: 8000
           envFrom:

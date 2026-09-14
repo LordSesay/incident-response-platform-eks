@@ -49,7 +49,6 @@ logs
 *.log
 
 # Docker
-.dockerignore
 
 # Kubernetes
 kubeconfig
@@ -72,3 +71,10 @@ coverage/
 dist/
 build/
 out/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage

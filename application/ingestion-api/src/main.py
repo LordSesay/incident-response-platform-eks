@@ -12,7 +12,7 @@ app = FastAPI(title="ingestion-api", version="1.0.0")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 INCIDENTS_TABLE = os.getenv("INCIDENTS_TABLE", "incident-response-incidents")
 
-dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION, endpoint_url=os.getenv("DYNAMODB_ENDPOINT_URL"))
 table = dynamodb.Table(INCIDENTS_TABLE)
 
 

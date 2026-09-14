@@ -1,343 +1,89 @@
-# incident-response-platform-eks
+# Incident Response Platform (EKS)
 
-## Overview
+Two FastAPI services normalize incoming alerts, persist incidents in DynamoDB, and expose incident retrieval. This portfolio project is being developed toward deployment on Amazon EKS. Classification currently runs inside ingestion-api.
 
-incident-response-platform-eks is a cloud-native internal operations platform built to standardize alert intake, classify incident severity, and expose incident data to responders through APIs and a dashboard.
+## Evidence and status
 
-The project demonstrates how a multi-service platform can be deployed to Amazon EKS using GitHub Actions for CI/CD, Terraform for infrastructure provisioning, Docker for containerization, and CloudWatch / Prometheus for observability.
+| Capability | Status |
+| --- | --- |
+| Alert ingestion, priority/team mapping, DynamoDB writes | Implemented |
+| Incident listing, status/severity filters, lookup by ID | Implemented; listing follows DynamoDB scan pages |
+| Deterministic unit tests and cross-service DynamoDB integration test | Implemented; see validation record below |
+| Non-root Docker images and local Compose environment | Implemented; see validation record below |
+| GitHub Actions unit, integration, and container checks | Workflow added; hosted run pending |
+| Terraform VPC, ECR, DynamoDB, IAM, EKS and node group | Existing local implementation; deployment not verified in this work |
+| Kubernetes deployments, ClusterIP services and health probes | Existing definitions; deployment not verified in this work |
+| ECR publishing and automated EKS deployment | Pending |
+| Separate classifier, dashboard, authentication, centralized metrics/logs | Pending |
 
-This is not a generic web app deployment demo.
-It is a portfolio project designed to simulate how platform and DevOps engineers support internal engineering operations at enterprise scale.
+A historical node screenshot exists in `docs/screenshots/`. It does not establish that these API images or the current infrastructure revision have been deployed successfully.
 
----
+## Current application flow
 
-## Problem Statement
-
-Engineering teams often receive alerts from multiple systems such as infrastructure monitors, application logs, and external integrations. In many environments, these alerts are inconsistent, noisy, and difficult to triage quickly.
-
-Common operational problems include:
-
-- Alert fatigue caused by high volumes of unstructured events
-- Inconsistent severity classification between teams
-- Delayed response due to fragmented tooling
-- Lack of centralized visibility into active incidents
-- Manual deployment workflows that increase operational risk
-
-The goal of this project is to create an internal platform that centralizes incoming alerts, classifies incident severity, stores normalized incident records, and provides a consistent deployment and observability model on Kubernetes.
-
----
-
-## Solution
-
-This platform includes:
-
-- **Alert Ingestion API** to receive incoming incident or alert payloads
-- **Classifier Service** to normalize alerts and assign severity / ownership
-- **Incident API** to retrieve and manage incident records
-- **Operations Dashboard** to visualize active incidents and platform health
-- **Amazon EKS** for Kubernetes orchestration
-- **Terraform** for infrastructure as code
-- **GitHub Actions** for automated build, test, push, and deployment workflows
-- **Amazon ECR** for container image storage
-- **CloudWatch and Prometheus** for logs and metrics
-
----
-
-## Architecture
-
-```
-Developer Push
-     |
-     v
-GitHub Repository
-     |
-     v
-GitHub Actions CI/CD
-  - test services
-  - build Docker images
-  - push images to ECR
-  - deploy manifests to EKS
-     |
-     v
-Amazon EKS Cluster
-  - ingestion-api
-  - classifier-service
-  - incident-api
-  - dashboard
-     |
-     v
-DynamoDB / Incident Store
-     |
-     v
-CloudWatch + Prometheus + Grafana
+```text
+POST /alerts -> ingestion-api (classification) -> DynamoDB
+                                                  |
+GET /incidents or /incidents/{id} <- incident-api <-+
 ```
 
----
+- Both services expose `GET /health` and FastAPI `/docs`.
+- `POST /alerts` requires source, service_name, severity and message; timestamp is optional.
+- Severity maps critical/high/medium/low to p1/p2/p3/p4. Unknown severity defaults to p4.
+- Service names containing payment/auth/network map to finops/identity/platform; others map to sre.
+- Incidents start with status `open`. No incident update endpoint exists yet.
 
-## Why EKS
+## Run the tests
 
-Kubernetes is justified in this project because the platform is composed of multiple independently deployable services with different runtime behaviors.
-
-EKS provides:
-
-- Rolling deployments for safer releases
-- Service discovery between internal services
-- Horizontal scaling for ingestion-heavy workloads
-- Self-healing through health probes and pod restarts
-- A realistic platform for observability, RBAC, and workload separation
-
-This makes the project meaningfully different from simpler ECS-based application deployments.
-
----
-
-## Core Services
-
-### 1. ingestion-api
-
-Receives incoming alerts through REST endpoints.
-
-Example responsibilities:
-- Validate payloads
-- Assign request IDs
-- Publish or persist raw alert data
-- Forward normalized records for classification
-
-### 2. classifier-service
-
-Applies incident classification rules.
-
-Example responsibilities:
-- Severity mapping
-- Incident priority assignment
-- Team ownership tagging
-- Status initialization
-
-### 3. incident-api
-
-Exposes incident data to users and internal tools.
-
-Example endpoints:
-- `GET /incidents`
-- `GET /incidents/{id}`
-- `PATCH /incidents/{id}`
-
-### 4. dashboard
-
-Internal interface for responders to review incidents, status, and metrics.
-
----
-
-## Repository Structure
-
-```
-incident-response-platform-eks/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── deploy.yml
-├── application/
-│   ├── ingestion-api/
-│   │   ├── src/
-│   │   ├── tests/
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── classifier-service/
-│   │   ├── src/
-│   │   ├── tests/
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── incident-api/
-│   │   ├── src/
-│   │   ├── tests/
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── dashboard/
-│   │   ├── src/
-│   │   ├── Dockerfile
-│   │   └── package.json
-│   └── k8s/
-│       ├── namespace.yaml
-│       ├── ingestion-api.yaml
-│       ├── classifier-service.yaml
-│       ├── incident-api.yaml
-│       ├── dashboard.yaml
-│       ├── configmap.yaml
-│       ├── secrets.yaml
-│       └── ingress.yaml
-├── infrastructure/
-│   ├── modules/
-│   │   ├── vpc/
-│   │   ├── eks/
-│   │   ├── ecr/
-│   │   ├── iam/
-│   │   └── monitoring/
-│   ├── environments/
-│   │   ├── dev/
-│   │   └── prod/
-│   └── main.tf
-├── docs/
-│   ├── architecture.md
-│   ├── diagrams/
-│   ├── runbooks/
-│   ├── screenshots/
-│   └── learning-notes.md
-├── scripts/
-│   ├── bootstrap.sh
-│   ├── deploy.sh
-│   └── smoke-test.sh
-├── README.md
-└── QUICKSTART.md
-```
-
----
-
-## CI/CD Workflow
-
-The deployment pipeline is powered by GitHub Actions.
-
-High-level workflow:
-
-1. Developer pushes code to GitHub
-2. Workflow runs tests for changed services
-3. Docker images are built and tagged
-4. Images are pushed to Amazon ECR
-5. Kubernetes manifests are updated or applied
-6. Workloads are deployed to Amazon EKS
-7. Smoke tests validate deployment success
-
-This pipeline removes manual deployment steps and creates a repeatable release process.
-
----
-
-## Infrastructure
-
-Terraform provisions the AWS environment required to run the platform, including:
-
-- VPC and networking
-- EKS cluster and node groups
-- ECR repositories
-- IAM roles and policies
-- Security groups
-- Monitoring components
-- Optional DNS / ingress support
-
----
-
-## Observability
-
-The platform includes observability at both the infrastructure and workload layers.
-
-**Logging**
-- CloudWatch for centralized application and infrastructure logs
-
-**Metrics**
-- Prometheus for Kubernetes and service metrics
-- Grafana dashboards for visualization
-
-**Health validation**
-- Liveness and readiness probes
-- Deployment rollout checks
-- Smoke testing after deployment
-
----
-
-## Security
-
-Security controls demonstrated in this project include:
-
-- IAM least privilege for AWS resources
-- Kubernetes RBAC
-- Namespace isolation
-- Secret handling for service configuration
-- Containerized workloads with controlled deployment paths
-- Optional image scanning and policy enforcement
-
----
-
-## Local Development
-
-### Prerequisites
-
-- AWS CLI configured
-- Terraform >= 1.0
-- kubectl
-- Docker
-- Python 3.11+
-- GitHub repository secrets configured for CI/CD
-
-### Clone the repository
+Python 3.11 or 3.12:
 
 ```bash
-git clone https://github.com/LordSesay/incident-response-platform-eks.git
-cd incident-response-platform-eks
+python -m venv .venv
+# Activate: Windows PowerShell .\.venv\Scripts\Activate.ps1
+# Activate: macOS/Linux source .venv/bin/activate
+python -m pip install -r requirements-test.txt
+(cd application/ingestion-api && python -m pytest tests -q)
+(cd application/incident-api && python -m pytest tests -q)
+python -m pytest tests -q
 ```
 
-### Provision infrastructure
+On PowerShell, run each service test after `Push-Location application/ingestion-api` (or `incident-api`), then `Pop-Location`. Service tests run separately because both services use the module name `src.main`. Unit tests mock DynamoDB operations. The root integration test runs both APIs against one isolated Moto table, with test credentials and no AWS deployment.
+
+## Run and verify the containers
+
+With Docker Desktop (Linux containers) or Docker Engine and Compose:
 
 ```bash
-cd infrastructure
-terraform init
-terraform plan
-terraform apply
+docker compose up --build --wait ingestion-api incident-api
+docker compose --profile test run --rm smoke
 ```
 
-### Configure kubectl
+The smoke test initializes the disposable DynamoDB Local table, posts an alert through the ingestion container, retrieves it through the incident container, and checks classification and filtering. Run it before using the APIs manually.
+
+- Ingestion: http://localhost:8001/docs
+- Incidents: http://localhost:8002/docs
 
 ```bash
-aws eks update-kubeconfig --region us-east-1 --name incident-response-eks
+docker compose --profile test down --volumes --remove-orphans
 ```
 
-### Deploy workloads
+Only loopback API ports are published. DynamoDB data is in memory and is discarded when its container stops. Compose supplies local dummy credentials; AWS credentials are not required.
 
-```bash
-kubectl apply -f application/k8s/
-```
+## Configuration
 
----
+| Variable | Default / purpose |
+| --- | --- |
+| AWS_REGION | us-east-1 |
+| INCIDENTS_TABLE | incident-response-incidents |
+| DYNAMODB_ENDPOINT_URL | Unset for AWS; Compose sets the local emulator endpoint |
 
-## Real Execution Goals
+`/health` reports process health, not database readiness. The APIs currently lack authentication, use full-table scans for listing, and return AWS error details. These are development services; authentication, bounded pagination and error sanitization remain before external exposure.
 
-This project is designed to demonstrate real platform-engineering experience, including:
+## Infrastructure boundary
 
-- Designing multi-service containerized systems
-- Provisioning repeatable AWS infrastructure with Terraform
-- Automating deployments with GitHub Actions
-- Deploying and operating workloads on Kubernetes
-- Implementing monitoring, logging, and rollout validation
-- Documenting operational lessons learned
+The existing Terraform configuration creates public subnets, ECR repositories, a DynamoDB table, an EKS cluster and managed nodes. It currently grants database access through the node role. The Kubernetes manifests use account-specific ECR URLs and mutable `latest` tags. Terraform configuration and a screenshot are evidence of implementation/history, not proof of a current successful application deployment.
 
----
+Next milestone: review Kubernetes version support and infrastructure defaults, replace node-level database access with workload-specific IAM, publish immutable image tags, verify a rollout and alert round trip in EKS, and record deployment and cleanup evidence. The legacy setup/cleanup scripts and older learning notes require review before use.
 
-## Challenges I Expect to Solve
+## Validation record
 
-As this project evolves, key engineering challenges will include:
-
-- GitHub Actions authentication to AWS
-- ECR image versioning and deployment traceability
-- Service-to-service communication in Kubernetes
-- Readiness and liveness probe tuning
-- Terraform dependency management
-- Scaling and rollout behavior under load
-- Observability and debugging across services
-
-This section will be updated with real troubleshooting notes as the build progresses.
-
----
-
-## Future Enhancements
-
-Possible future improvements include:
-
-- Helm chart packaging
-- ArgoCD for GitOps-based delivery
-- Incident notification integrations
-- SQS or SNS-based event flow
-- Authentication for dashboard users
-- Advanced routing and ingress controls
-- Multi-environment promotion strategy
-
----
-
-## Author
-
-**LordSesay**
+See [baseline validation](docs/baseline-validation.md) for commands, results and remaining deployment checks. The CI workflow runs tests before building and smoke-testing containers; it does not publish images or deploy AWS resources.

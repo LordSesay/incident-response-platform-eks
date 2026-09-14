@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: incident-api
-          image: YOUR_ECR_URI/incident-api:latest
+          image: 767398054553.dkr.ecr.us-east-1.amazonaws.com/incident-api:latest
           ports:
             - containerPort: 8000
           envFrom:

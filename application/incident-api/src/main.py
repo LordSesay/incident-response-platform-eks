@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from typing import Optional
 import os
 import boto3
-from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 
 app = FastAPI(title="incident-api", version="1.0.0")
@@ -10,7 +9,7 @@ app = FastAPI(title="incident-api", version="1.0.0")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 INCIDENTS_TABLE = os.getenv("INCIDENTS_TABLE", "incident-response-incidents")
 
-dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION, endpoint_url=os.getenv("DYNAMODB_ENDPOINT_URL"))
 table = dynamodb.Table(INCIDENTS_TABLE)
 
 
@@ -27,6 +26,9 @@ def list_incidents(
     try:
         response = table.scan()
         items = response.get("Items", [])
+        while response.get("LastEvaluatedKey"):
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+            items.extend(response.get("Items", []))
 
         if status:
             items = [item for item in items if item.get("status") == status]
