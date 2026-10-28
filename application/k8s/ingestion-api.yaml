@@ -44,15 +44,19 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+          # Readiness checks DynamoDB, so an outage removes pods from the Service
+          # without restarting them. Liveness checks only the process.
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 15

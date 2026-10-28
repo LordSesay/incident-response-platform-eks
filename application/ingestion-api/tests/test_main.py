@@ -105,3 +105,34 @@ def test_write_failure(monkeypatch):
     response = client.post("/alerts", json={"source": "test", "service_name": "auth", "severity": "high", "message": "test"})
     assert response.status_code == 500
     assert response.json() == {"detail": "Failed to store incident: Unavailable"}
+
+from botocore.exceptions import EndpointConnectionError
+
+def test_liveness_alias():
+    assert client.get("/health/live").json() == {"status": "ok", "service": "ingestion-api"}
+
+@pytest.mark.parametrize("table_status", ["ACTIVE", "UPDATING"])
+def test_ready_when_table_usable(monkeypatch, table_status):
+    db = Mock()
+    db.describe_table.return_value = {"Table": {"TableStatus": table_status}}
+    monkeypatch.setattr(main, "readiness_client", db)
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "service": "ingestion-api"}
+    db.describe_table.assert_called_once_with(TableName=main.INCIDENTS_TABLE)
+
+@pytest.mark.parametrize("outcome", [
+    ClientError({"Error": {"Code": "AccessDeniedException", "Message": "secret detail"}}, "DescribeTable"),
+    EndpointConnectionError(endpoint_url="http://dynamodb.invalid"),
+    {"Table": {"TableStatus": "CREATING"}},
+])
+def test_not_ready_returns_503_without_detail(monkeypatch, outcome):
+    db = Mock()
+    if isinstance(outcome, Exception):
+        db.describe_table.side_effect = outcome
+    else:
+        db.describe_table.return_value = outcome
+    monkeypatch.setattr(main, "readiness_client", db)
+    response = client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable", "service": "ingestion-api"}
