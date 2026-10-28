@@ -33,6 +33,7 @@ GET /incidents or /incidents/{id} <- incident-api <-+
 - Severity (case-insensitive) maps critical/high/medium/low to p1/p2/p3/p4. Timestamps are stored normalized to UTC.
 - Service names containing payment/auth/network map to finops/identity/platform; others map to sre.
 - Incidents start with status `open`. No incident update endpoint exists yet.
+- `GET /incidents` filters by `status` and `severity` case-insensitively.
 
 ## Run the tests
 

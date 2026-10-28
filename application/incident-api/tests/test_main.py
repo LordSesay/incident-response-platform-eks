@@ -140,3 +140,11 @@ def test_not_ready_returns_503_without_detail(monkeypatch, outcome):
     response = client.get("/health/ready")
     assert response.status_code == 503
     assert response.json() == {"status": "unavailable", "service": "incident-api"}
+
+@pytest.mark.parametrize("query", ["status=open", "status=OPEN", "status=Open", "status=%20open%20", "severity=%20High%20"])
+def test_filters_are_case_insensitive(monkeypatch, query):
+    table = Mock()
+    match = {"incident_id": "a", "severity": "high", "status": "open"}
+    table.scan.return_value = {"Items": [match, {"incident_id": "b", "severity": "low", "status": "closed"}]}
+    monkeypatch.setattr(main, "table", table)
+    assert client.get("/incidents?" + query).json() == {"count": 1, "incidents": [match]}

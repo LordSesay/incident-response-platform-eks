@@ -36,6 +36,7 @@ def test_alert_to_incident(monkeypatch):
         assert fetched.json() == record
         assert incidents.get("/incidents?status=open&severity=critical").json() == {"count": 1, "incidents": [record]}
         assert incidents.get("/incidents?severity=low").json() == {"count": 0, "incidents": []}
+        assert incidents.get("/incidents?status=OPEN&severity=Critical").json() == {"count": 1, "incidents": [record]}
 
 
 def test_readiness_tracks_table(monkeypatch):

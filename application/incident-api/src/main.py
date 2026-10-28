@@ -61,10 +61,11 @@ def list_incidents(
             response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
             items.extend(response.get("Items", []))
 
+        # Stored values are lowercase, so filters are case-insensitive.
         if status:
-            items = [item for item in items if item.get("status") == status]
+            items = [item for item in items if item.get("status") == status.strip().lower()]
         if severity:
-            items = [item for item in items if item.get("severity") == severity.lower()]
+            items = [item for item in items if item.get("severity") == severity.strip().lower()]
 
         return {"count": len(items), "incidents": items}
     except ClientError as exc:
