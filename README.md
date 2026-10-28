@@ -10,7 +10,7 @@ Two FastAPI services normalize incoming alerts, persist incidents in DynamoDB, a
 | Incident listing, status/severity filters, lookup by ID | Implemented; listing follows DynamoDB scan pages |
 | Deterministic unit tests and cross-service DynamoDB integration test | Implemented; see validation record below |
 | Non-root Docker images and local Compose environment | Implemented; see validation record below |
-| GitHub Actions unit, integration, and container checks | Workflow added; hosted run pending |
+| GitHub Actions unit, integration, and container checks | Hosted run passed; see validation record |
 | Terraform VPC, ECR, DynamoDB, IAM, EKS and node group | Existing local implementation; deployment not verified in this work |
 | Kubernetes deployments, ClusterIP services, health probes, restricted Pod Security profile and resource requests | Definitions statically checked; deployment not verified |
 | ECR publishing and automated EKS deployment | Pending |
