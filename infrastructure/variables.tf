@@ -23,9 +23,11 @@ variable "eks_cluster_name" {
 }
 
 variable "kubernetes_version" {
+  # Check support dates before changing: aws eks describe-cluster-versions
+  # EKS upgrades one minor version at a time, so an existing cluster must step through each version.
   description = "EKS Kubernetes version"
   type        = string
-  default     = "1.30"
+  default     = "1.35"
 }
 
 variable "node_instance_types" {
