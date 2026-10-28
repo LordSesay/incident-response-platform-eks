@@ -187,7 +187,8 @@ resource "aws_iam_policy" "dynamodb_access" {
           "dynamodb:PutItem",
           "dynamodb:GetItem",
           "dynamodb:Scan",
-          "dynamodb:UpdateItem"
+          "dynamodb:UpdateItem",
+          "dynamodb:DescribeTable" # used by /health/ready
         ]
         Resource = aws_dynamodb_table.incidents.arn
       }

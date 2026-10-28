@@ -30,6 +30,9 @@ def request(url, payload=None):
 
 assert request("http://ingestion-api:8000/health")["status"] == "ok"
 assert request("http://incident-api:8000/health")["status"] == "ok"
+# Readiness checks DescribeTable, so it can only pass once the table above exists.
+assert request("http://ingestion-api:8000/health/ready")["status"] == "ok"
+assert request("http://incident-api:8000/health/ready")["status"] == "ok"
 result = request("http://ingestion-api:8000/alerts", {"source": "smoke-test", "service_name": "payment-api", "severity": "CRITICAL", "message": "Container round trip"})
 record = result["record"]
 assert record["priority"] == "p1" and record["assigned_team"] == "finops"
