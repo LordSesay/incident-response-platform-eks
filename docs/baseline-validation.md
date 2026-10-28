@@ -32,7 +32,7 @@ The smoke script initializes only the Compose emulator table and verifies actual
 
 ## Hosted CI run
 
-[Run #2](https://github.com/LordSesay/incident-response-platform-eks/actions/runs/40741086253) passed on 2026-10-28 for commit `ea53089` (branch `claude/audit-hardening`, PR #1), on `ubuntu-latest` with Python 3.11.17. This commit adds stricter alert validation, so the test counts differ from the local record above.
+[Run #2](https://github.com/LordSesay/incident-response-platform-eks/actions/runs/40741086253) passed on 2026-10-28 for commit `ea53089` (PR #1), on `ubuntu-latest` with Python 3.11.17. This commit adds stricter alert validation, so the test counts differ from the local record above. Commit authorship was later rewritten without changing content: the tested tree is `30f741c` on `main`, and `ea53089` remains visible in PR #1.
 
 | Job / step | Result from the job log |
 | --- | --- |
