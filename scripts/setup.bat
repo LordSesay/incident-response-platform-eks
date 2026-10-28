@@ -6,10 +6,11 @@ echo.
 echo 🚀 DevOps EKS Pipeline Setup
 echo ==================================
 
-REM Configuration
-set AWS_REGION=us-west-2
-set CLUSTER_NAME=devops-eks-cluster
+REM Configuration (defaults match infrastructure\variables.tf)
+if not defined AWS_REGION set AWS_REGION=us-east-1
+if not defined CLUSTER_NAME set CLUSTER_NAME=incident-response-eks
 set TERRAFORM_DIR=infrastructure
+set PLAN_FILE=terraform.tfplan
 
 echo.
 echo 📋 Checking prerequisites...
@@ -47,7 +48,12 @@ echo ✅ All prerequisites met
 echo.
 echo 🔧 Initializing Terraform...
 cd %TERRAFORM_DIR%
-terraform init
+if not exist backend.hcl (
+    echo ❌ %TERRAFORM_DIR%\backend.hcl not found; copy backend.hcl.example and set the state bucket
+    cd ..
+    exit /b 1
+)
+terraform init -backend-config=backend.hcl
 if %errorlevel% neq 0 (
     echo ❌ Terraform init failed
     cd ..
@@ -59,7 +65,7 @@ echo ✅ Terraform initialized
 echo.
 echo 📋 Planning infrastructure...
 cd %TERRAFORM_DIR%
-terraform plan -var="aws_region=%AWS_REGION%" -var="cluster_name=%CLUSTER_NAME%"
+terraform plan -var="aws_region=%AWS_REGION%" -var="eks_cluster_name=%CLUSTER_NAME%" -out="%PLAN_FILE%"
 if %errorlevel% neq 0 (
     echo ❌ Terraform plan failed
     cd ..
@@ -71,23 +77,26 @@ echo ✅ Infrastructure plan complete
 echo.
 echo ⚠️  Ready to create infrastructure. Continue? (y/N)
 set /p response=
+REM Inside a parenthesised block %errorlevel% is expanded once at parse time,
+REM so the checks below use "if errorlevel 1", which is evaluated at runtime.
 if /i "%response%"=="y" (
     echo.
     echo 🏗️  Applying infrastructure...
     cd %TERRAFORM_DIR%
-    terraform apply -var="aws_region=%AWS_REGION%" -var="cluster_name=%CLUSTER_NAME%" -auto-approve
-    if %errorlevel% neq 0 (
+    terraform apply "%PLAN_FILE%"
+    if errorlevel 1 (
         echo ❌ Terraform apply failed
         cd ..
         exit /b 1
     )
+    del "%PLAN_FILE%"
     cd ..
     echo ✅ Infrastructure applied
 
     echo.
     echo ⚙️  Configuring kubectl...
     aws eks update-kubeconfig --region %AWS_REGION% --name %CLUSTER_NAME%
-    if %errorlevel% neq 0 (
+    if errorlevel 1 (
         echo ❌ kubectl configuration failed
         exit /b 1
     )
