@@ -10,7 +10,7 @@ Validated locally on 2026-09-14 using Windows, Python 3.12.4 and Docker Desktop 
 | Both Docker image builds | Passed |
 | Both container health checks | Passed |
 | HTTP alert write -> DynamoDB Local -> incident read/filter | Passed |
-| GitHub-hosted workflow | Pending push and hosted run |
+| GitHub-hosted workflow | Passed on 2026-10-28; see hosted run below |
 | ECR/EKS release | Not attempted |
 
 Unit tests were executed in each service directory with `python -m pytest tests -q -p no:cacheprovider`; the integration test used the same command at the repository root. Tests cover classification rules, required fields, successful persistence, missing incidents, storage failures, empty results, filtering across scan pages and a complete SDK-backed round trip. Dependency deprecation warnings remain in the existing FastAPI/Pydantic/botocore stack; they did not fail the tests.
@@ -30,9 +30,23 @@ PASS: both container health checks and alert -> DynamoDB -> incident read
 
 The smoke script initializes only the Compose emulator table and verifies actual HTTP requests across separate application containers. This proves the local application/container baseline, not AWS IAM, network access, ECR publishing or EKS deployment.
 
+## Hosted CI run
+
+[Run #2](https://github.com/LordSesay/incident-response-platform-eks/actions/runs/40741086253) passed on 2026-10-28 for commit `ea53089` (branch `claude/audit-hardening`, PR #1), on `ubuntu-latest` with Python 3.11.17. This commit adds stricter alert validation, so the test counts differ from the local record above.
+
+| Job / step | Result from the job log |
+| --- | --- |
+| Ingestion unit tests | 23 passed |
+| Incident unit tests | 8 passed |
+| Moto DynamoDB integration | 1 passed |
+| `docker compose up --build --wait` (both images, health checks) | Passed |
+| Compose smoke test | `PASS: both container health checks and alert -> DynamoDB -> incident read` |
+
+This is a Compose run on a GitHub runner. It does not exercise the Kubernetes security context, Pod Security admission, AWS IAM, ECR or EKS.
+
 ## Next evidence to collect
 
-1. Push the reviewed changes and retain a passing GitHub Actions run link.
+1. ~~Push the reviewed changes and retain a passing GitHub Actions run link.~~ Done; see hosted CI run.
 2. Review existing Terraform and Kubernetes configuration, including cluster version support, public network defaults, node IAM and mutable image references.
 3. Publish immutable images, deploy a reviewed configuration, and capture rollout status plus an authenticated alert/read test in EKS.
 4. Document workload IAM, observability, recovery and resource cleanup before claiming those capabilities.
