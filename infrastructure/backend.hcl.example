@@ -1,0 +1,7 @@
+# Copy to backend.hcl (git-ignored) and replace the bucket name.
+# The bucket must exist before terraform init; see README "Terraform state".
+bucket       = "REPLACE-ME-incident-response-tfstate"
+key          = "incident-response/dev/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

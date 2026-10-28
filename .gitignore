@@ -5,7 +5,8 @@
 *.tfstate.*
 *.tfvars
 .terraform/
-.terraform.lock.hcl
+# .terraform.lock.hcl is committed so every init uses the same provider build.
+backend.hcl
 terraform.tfplan
 terraform.tfstate.backup
 
