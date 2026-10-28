@@ -30,7 +30,7 @@ def test_alert_to_incident(monkeypatch):
         record = result.json()["record"]
         assert record["priority"] == "p1"
         assert record["assigned_team"] == "finops"
-        assert record["timestamp"] == payload["timestamp"]
+        assert record["timestamp"] == "2026-09-14T12:00:00+00:00"
         fetched = incidents.get("/incidents/" + record["incident_id"])
         assert fetched.status_code == 200
         assert fetched.json() == record

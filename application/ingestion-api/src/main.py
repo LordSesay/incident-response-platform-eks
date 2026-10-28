@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from typing import Literal, Optional
 from datetime import datetime, timezone
 from uuid import uuid4
 import os
@@ -16,15 +16,30 @@ dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION, endpoint_url=os.ge
 table = dynamodb.Table(INCIDENTS_TABLE)
 
 
+PRIORITY_BY_SEVERITY = {
+    "critical": "p1",
+    "high": "p2",
+    "medium": "p3",
+    "low": "p4",
+}
+
+
 class AlertPayload(BaseModel):
-    source: str = Field(..., example="cloudwatch")
-    service_name: str = Field(..., example="payment-service")
-    severity: str = Field(..., example="high")
-    message: str = Field(..., example="CPU usage exceeded 90% for 5 minutes")
-    timestamp: Optional[str] = Field(
-        default=None,
-        example="2026-04-20T12:00:00Z"
-    )
+    # Whitespace-only values are stripped first, so min_length rejects them.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    source: str = Field(..., min_length=1, max_length=128, examples=["cloudwatch"])
+    service_name: str = Field(..., min_length=1, max_length=128, examples=["payment-service"])
+    # Unknown severities are rejected rather than silently assigned a priority.
+    severity: Literal["critical", "high", "medium", "low"] = Field(..., examples=["high"])
+    # Bounded well below the 400 KB DynamoDB item limit.
+    message: str = Field(..., min_length=1, max_length=4096, examples=["CPU usage exceeded 90% for 5 minutes"])
+    timestamp: Optional[AwareDatetime] = Field(default=None, examples=["2026-04-20T12:00:00Z"])
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalize_severity(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 @app.get("/health")
@@ -36,14 +51,15 @@ def health_check():
 def ingest_alert(payload: AlertPayload):
     incident_id = str(uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
+    timestamp = payload.timestamp.astimezone(timezone.utc).isoformat() if payload.timestamp else created_at
 
     record = {
         "incident_id": incident_id,
         "source": payload.source,
         "service_name": payload.service_name,
-        "severity": payload.severity.lower(),
+        "severity": payload.severity,
         "message": payload.message,
-        "timestamp": payload.timestamp or created_at,
+        "timestamp": timestamp,
         "status": "open",
         "priority": map_priority(payload.severity),
         "assigned_team": map_team(payload.service_name),
@@ -66,14 +82,7 @@ def ingest_alert(payload: AlertPayload):
 
 
 def map_priority(severity: str) -> str:
-    severity = severity.lower()
-    mapping = {
-        "critical": "p1",
-        "high": "p2",
-        "medium": "p3",
-        "low": "p4",
-    }
-    return mapping.get(severity, "p4")
+    return PRIORITY_BY_SEVERITY[severity.lower()]
 
 
 def map_team(service_name: str) -> str:
