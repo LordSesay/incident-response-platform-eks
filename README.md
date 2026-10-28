@@ -26,7 +26,8 @@ POST /alerts -> ingestion-api (classification) -> DynamoDB
 GET /incidents or /incidents/{id} <- incident-api <-+
 ```
 
-- Both services expose `GET /health` and FastAPI `/docs`.
+- Both services expose `GET /health/live` (process only; `/health` is an alias), `GET /health/ready` and FastAPI `/docs`.
+- `/health/ready` returns `503` unless the incidents table is reachable and `ACTIVE` or `UPDATING` (DynamoDB `DescribeTable`, 1 s timeouts, no retries). Kubernetes uses it for readiness and `/health/live` for liveness, so a DynamoDB outage removes every pod from its Service without restarting it; callers then get connection errors and must retry.
 - `POST /alerts` requires source, service_name, severity and message; timestamp is optional.
 - Invalid payloads return `422` and are not stored: blank or oversized strings (source/service_name max 128, message max 4096), unknown severities, and timestamps that are not ISO 8601 with a UTC offset. Senders should treat `422` as a contract error, not retry it.
 - Severity (case-insensitive) maps critical/high/medium/low to p1/p2/p3/p4. Timestamps are stored normalized to UTC.
@@ -77,7 +78,7 @@ Only loopback API ports are published. DynamoDB data is in memory and is discard
 | INCIDENTS_TABLE | incident-response-incidents |
 | DYNAMODB_ENDPOINT_URL | Unset for AWS; Compose sets the local emulator endpoint |
 
-`/health` reports process health, not database readiness. The APIs currently lack authentication, use full-table scans for listing, and return AWS error details. These are development services; authentication, bounded pagination and error sanitization remain before external exposure.
+The APIs currently lack authentication, use full-table scans for listing, and return AWS error details. These are development services; authentication, bounded pagination and error sanitization remain before external exposure.
 
 ## Infrastructure boundary
 

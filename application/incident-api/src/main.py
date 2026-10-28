@@ -1,8 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from typing import Optional
+import logging
 import os
 import boto3
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="incident-api", version="1.0.0")
 
@@ -12,9 +17,35 @@ INCIDENTS_TABLE = os.getenv("INCIDENTS_TABLE", "incident-response-incidents")
 dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION, endpoint_url=os.getenv("DYNAMODB_ENDPOINT_URL"))
 table = dynamodb.Table(INCIDENTS_TABLE)
 
+# Readiness uses its own client with short timeouts and no retries, so a probe
+# fails fast instead of holding a request thread while DynamoDB is unreachable.
+readiness_client = boto3.client(
+    "dynamodb",
+    region_name=AWS_REGION,
+    endpoint_url=os.getenv("DYNAMODB_ENDPOINT_URL"),
+    config=Config(connect_timeout=1, read_timeout=1, retries={"total_max_attempts": 1}),
+)
 
+
+# /health is kept as an alias of /health/live for Compose and existing callers.
 @app.get("/health")
+@app.get("/health/live")
 def health_check():
+    return {"status": "ok", "service": "incident-api"}
+
+
+@app.get("/health/ready")
+def readiness_check():
+    # Reports whether this instance can reach its table. Error details go to the
+    # log, not the response.
+    try:
+        table_status = readiness_client.describe_table(TableName=INCIDENTS_TABLE)["Table"]["TableStatus"]
+    except (BotoCoreError, ClientError) as exc:
+        logger.warning("Readiness check failed: %s", exc)
+        table_status = None
+
+    if table_status not in ("ACTIVE", "UPDATING"):
+        return JSONResponse(status_code=503, content={"status": "unavailable", "service": "incident-api"})
     return {"status": "ok", "service": "incident-api"}
 
 

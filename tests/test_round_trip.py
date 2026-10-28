@@ -36,3 +36,17 @@ def test_alert_to_incident(monkeypatch):
         assert fetched.json() == record
         assert incidents.get("/incidents?status=open&severity=critical").json() == {"count": 1, "incidents": [record]}
         assert incidents.get("/incidents?severity=low").json() == {"count": 0, "incidents": []}
+
+
+def test_readiness_tracks_table(monkeypatch):
+    for key, value in {"AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing", "AWS_SESSION_TOKEN": "testing", "AWS_REGION": "us-east-1", "AWS_EC2_METADATA_DISABLED": "true", "INCIDENTS_TABLE": "readiness"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("DYNAMODB_ENDPOINT_URL", raising=False)
+    with mock_aws():
+        services = [TestClient(load_service(name).app) for name in ("ingestion-api", "incident-api")]
+        assert [s.get("/health/ready").status_code for s in services] == [503, 503]
+        boto3.client("dynamodb", region_name="us-east-1").create_table(
+            TableName="readiness", KeySchema=[{"AttributeName": "incident_id", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "incident_id", "AttributeType": "S"}], BillingMode="PAY_PER_REQUEST")
+        assert [s.get("/health/ready").status_code for s in services] == [200, 200]
+        assert [s.get("/health/live").status_code for s in services] == [200, 200]
