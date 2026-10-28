@@ -10,9 +10,9 @@ Two FastAPI services normalize incoming alerts, persist incidents in DynamoDB, a
 | Incident listing, status/severity filters, lookup by ID | Implemented; listing follows DynamoDB scan pages |
 | Deterministic unit tests and cross-service DynamoDB integration test | Implemented; see validation record below |
 | Non-root Docker images and local Compose environment | Implemented; see validation record below |
-| GitHub Actions unit, integration, and container checks | Workflow added; hosted run pending |
+| GitHub Actions unit, integration, and container checks | Hosted run passed; see validation record |
 | Terraform VPC, ECR, DynamoDB, IAM, EKS and node group | Existing local implementation; deployment not verified in this work |
-| Kubernetes deployments, ClusterIP services and health probes | Existing definitions; deployment not verified in this work |
+| Kubernetes deployments, ClusterIP services, health probes, restricted Pod Security profile and resource requests | Definitions statically checked; deployment not verified |
 | ECR publishing and automated EKS deployment | Pending |
 | Separate classifier, dashboard, authentication, centralized metrics/logs | Pending |
 
@@ -28,7 +28,8 @@ GET /incidents or /incidents/{id} <- incident-api <-+
 
 - Both services expose `GET /health` and FastAPI `/docs`.
 - `POST /alerts` requires source, service_name, severity and message; timestamp is optional.
-- Severity maps critical/high/medium/low to p1/p2/p3/p4. Unknown severity defaults to p4.
+- Invalid payloads return `422` and are not stored: blank or oversized strings (source/service_name max 128, message max 4096), unknown severities, and timestamps that are not ISO 8601 with a UTC offset. Senders should treat `422` as a contract error, not retry it.
+- Severity (case-insensitive) maps critical/high/medium/low to p1/p2/p3/p4. Timestamps are stored normalized to UTC.
 - Service names containing payment/auth/network map to finops/identity/platform; others map to sre.
 - Incidents start with status `open`. No incident update endpoint exists yet.
 
@@ -82,7 +83,22 @@ Only loopback API ports are published. DynamoDB data is in memory and is discard
 
 The existing Terraform configuration creates public subnets, ECR repositories, a DynamoDB table, an EKS cluster and managed nodes. It currently grants database access through the node role. The Kubernetes manifests use account-specific ECR URLs and mutable `latest` tags. Terraform configuration and a screenshot are evidence of implementation/history, not proof of a current successful application deployment.
 
-Next milestone: review Kubernetes version support and infrastructure defaults, replace node-level database access with workload-specific IAM, publish immutable image tags, verify a rollout and alert round trip in EKS, and record deployment and cleanup evidence. The legacy setup/cleanup scripts and older learning notes require review before use.
+Next milestone: review infrastructure defaults, replace node-level database access with workload-specific IAM, publish immutable image tags, verify a rollout and alert round trip in EKS, and record deployment and cleanup evidence. The legacy setup/cleanup scripts and older learning notes require review before use.
+
+## Terraform state
+
+State is stored in S3 with native lock files (Terraform 1.10+). The bucket is created once, outside this configuration, so the state does not depend on the resources it describes:
+
+```bash
+BUCKET=<globally-unique-name>
+aws s3api create-bucket --bucket "$BUCKET" --region us-east-1   # other regions also need --create-bucket-configuration LocationConstraint=<region>
+aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
+aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+cp infrastructure/backend.hcl.example infrastructure/backend.hcl   # then set bucket
+terraform -chdir=infrastructure init -backend-config=backend.hcl
+```
+
+Existing local state is moved with `terraform init -migrate-state -backend-config=backend.hcl`. `.terraform.lock.hcl` is committed and pins the AWS provider build for Linux, Windows and macOS. The cluster uses the STANDARD upgrade policy, so it is upgraded automatically at the end of standard support instead of entering paid extended support.
 
 ## Validation record
 

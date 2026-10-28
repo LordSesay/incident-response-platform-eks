@@ -228,6 +228,11 @@ resource "aws_eks_cluster" "main" {
   role_arn = aws_iam_role.eks_cluster_role.arn
   version  = var.kubernetes_version
 
+  # Auto-upgrade at end of standard support instead of enrolling in paid extended support.
+  upgrade_policy {
+    support_type = "STANDARD"
+  }
+
   vpc_config {
     subnet_ids              = aws_subnet.public[*].id
     endpoint_public_access  = true

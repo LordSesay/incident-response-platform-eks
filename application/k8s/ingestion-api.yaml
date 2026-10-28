@@ -13,6 +13,14 @@ spec:
       labels:
         app: ingestion-api
     spec:
+      # No Kubernetes API access is needed; AWS credentials do not come from this token.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: ingestion-api
           image: 767398054553.dkr.ecr.us-east-1.amazonaws.com/ingestion-api:latest
@@ -21,6 +29,21 @@ spec:
           envFrom:
             - configMapRef:
                 name: incident-response-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Initial estimates; adjust from observed usage. No CPU limit, to avoid throttling.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /health
@@ -33,6 +56,11 @@ spec:
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 15
+      volumes:
+        # Writable scratch space, since the root filesystem is read-only.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
 ---
 apiVersion: v1
 kind: Service

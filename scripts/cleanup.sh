@@ -11,8 +11,9 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-AWS_REGION=${AWS_REGION:-"us-west-2"}
-CLUSTER_NAME=${CLUSTER_NAME:-"devops-eks-cluster"}
+# Defaults match infrastructure/variables.tf.
+AWS_REGION=${AWS_REGION:-"us-east-1"}
+CLUSTER_NAME=${CLUSTER_NAME:-"incident-response-eks"}
 TERRAFORM_DIR="infrastructure"
 
 echo -e "${RED}🧹 DevOps EKS Pipeline Cleanup${NC}"
@@ -35,15 +36,12 @@ warning_message() {
 cleanup_applications() {
     echo -e "${YELLOW}🗑️  Removing applications from cluster...${NC}"
     
-    # Check if cluster is accessible
-    if kubectl cluster-info &> /dev/null; then
-        # Delete application resources
-        kubectl delete -f application/k8s/ --ignore-not-found=true
-        
-        # Wait for load balancers to be deleted
-        echo -e "${YELLOW}⏳ Waiting for load balancers to be deleted...${NC}"
-        sleep 30
-        
+    # Target the named cluster explicitly rather than whatever context is current.
+    # update-kubeconfig names the context after the cluster ARN.
+    CLUSTER_ARN=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" --query cluster.arn --output text 2>/dev/null || true)
+    if [[ -n "$CLUSTER_ARN" ]] && kubectl --context "$CLUSTER_ARN" cluster-info &> /dev/null; then
+        kubectl --context "$CLUSTER_ARN" delete -f application/k8s/ --ignore-not-found=true --wait=true
+
         echo -e "${GREEN}✅ Applications removed${NC}"
     else
         echo -e "${YELLOW}⚠️  Cluster not accessible, skipping application cleanup${NC}"
@@ -54,7 +52,7 @@ cleanup_applications() {
 destroy_infrastructure() {
     echo -e "${YELLOW}💥 Destroying infrastructure...${NC}"
     cd $TERRAFORM_DIR
-    terraform destroy -var="aws_region=$AWS_REGION" -var="cluster_name=$CLUSTER_NAME" -auto-approve
+    terraform destroy -var="aws_region=$AWS_REGION" -var="eks_cluster_name=$CLUSTER_NAME" -auto-approve
     cd ..
     echo -e "${GREEN}✅ Infrastructure destroyed${NC}"
 }
@@ -62,8 +60,12 @@ destroy_infrastructure() {
 # Clean up kubectl config
 cleanup_kubectl() {
     echo -e "${YELLOW}🧹 Cleaning up kubectl config...${NC}"
-    kubectl config delete-context arn:aws:eks:$AWS_REGION:*:cluster/$CLUSTER_NAME 2>/dev/null || true
-    kubectl config delete-cluster arn:aws:eks:$AWS_REGION:*:cluster/$CLUSTER_NAME 2>/dev/null || true
+    # kubectl does not expand wildcards, so use the ARN captured before destroy.
+    if [[ -n "${CLUSTER_ARN:-}" ]]; then
+        kubectl config delete-context "$CLUSTER_ARN" 2>/dev/null || true
+        kubectl config delete-cluster "$CLUSTER_ARN" 2>/dev/null || true
+        kubectl config unset "users.$CLUSTER_ARN" 2>/dev/null || true
+    fi
     echo -e "${GREEN}✅ kubectl config cleaned${NC}"
 }
 
@@ -72,7 +74,7 @@ verify_cleanup() {
     echo -e "${YELLOW}🔍 Verifying cleanup...${NC}"
     
     # Check if cluster still exists
-    if aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION &> /dev/null; then
+    if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" &> /dev/null; then
         echo -e "${RED}❌ Cluster still exists${NC}"
         exit 1
     else
