@@ -28,7 +28,8 @@ GET /incidents or /incidents/{id} <- incident-api <-+
 
 - Both services expose `GET /health` and FastAPI `/docs`.
 - `POST /alerts` requires source, service_name, severity and message; timestamp is optional.
-- Severity maps critical/high/medium/low to p1/p2/p3/p4. Unknown severity defaults to p4.
+- Invalid payloads return `422` and are not stored: blank or oversized strings (source/service_name max 128, message max 4096), unknown severities, and timestamps that are not ISO 8601 with a UTC offset. Senders should treat `422` as a contract error, not retry it.
+- Severity (case-insensitive) maps critical/high/medium/low to p1/p2/p3/p4. Timestamps are stored normalized to UTC.
 - Service names containing payment/auth/network map to finops/identity/platform; others map to sre.
 - Incidents start with status `open`. No incident update endpoint exists yet.
 

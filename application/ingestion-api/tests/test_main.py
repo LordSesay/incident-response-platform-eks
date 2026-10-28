@@ -56,9 +56,37 @@ def test_ingest_alert(monkeypatch):
 import pytest
 from botocore.exceptions import ClientError
 
-@pytest.mark.parametrize("severity,priority", [("CRITICAL", "p1"), ("high", "p2"), ("medium", "p3"), ("low", "p4"), ("unknown", "p4")])
+@pytest.mark.parametrize("severity,priority", [("CRITICAL", "p1"), ("high", "p2"), ("medium", "p3"), ("low", "p4")])
 def test_priority_mapping(severity, priority):
     assert main.map_priority(severity) == priority
+
+VALID = {"source": "test", "service_name": "auth", "severity": "high", "message": "test"}
+
+@pytest.mark.parametrize("override", [
+    {"severity": "urgent"},
+    {"severity": "sev1"},
+    {"severity": 5},
+    {"source": ""},
+    {"service_name": "   "},
+    {"message": ""},
+    {"message": "A" * 4097},
+    {"source": "s" * 129},
+    {"timestamp": "not-a-date"},
+    {"timestamp": "2026-04-20T12:00:00"},
+])
+def test_invalid_field_rejected_without_write(monkeypatch, override):
+    table = Mock()
+    monkeypatch.setattr(main, "table", table)
+    assert client.post("/alerts", json={**VALID, **override}).status_code == 422
+    table.put_item.assert_not_called()
+
+def test_severity_normalized_and_timestamp_converted_to_utc(monkeypatch):
+    monkeypatch.setattr(main, "table", Mock())
+    response = client.post("/alerts", json={**VALID, "severity": " Critical ", "timestamp": "2026-04-20T14:00:00+02:00"})
+    record = response.json()["record"]
+    assert response.status_code == 200
+    assert (record["severity"], record["priority"]) == ("critical", "p1")
+    assert record["timestamp"] == "2026-04-20T12:00:00+00:00"
 
 @pytest.mark.parametrize("service,team", [("PAYMENT", "finops"), ("auth-api", "identity"), ("network", "platform"), ("other", "sre")])
 def test_team_mapping(service, team):
